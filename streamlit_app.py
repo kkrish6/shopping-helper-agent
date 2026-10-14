@@ -13,8 +13,8 @@ from providers import PROVIDERS
 from ranking import best_match, deal_verdict, find_alternatives
 from store import Store
 
-st.set_page_config(page_title="Shopping Helper", page_icon="🛒", layout="centered")
-st.title("🛒 Shopping Helper")
+st.set_page_config(page_title="Shopping Helper", page_icon="S", layout="centered")
+st.title("Shopping Helper")
 st.caption("Find cheaper similar products and track price drops (India).")
 
 
@@ -44,7 +44,31 @@ def card(p, extra=""):
     st.markdown(f"**₹{p.price:,.0f}**{off}{rate} · _{p.source}_  {extra}\n\n[{p.title[:90]}]({p.url})")
 
 
-tab_search, tab_watch = st.tabs(["Search", "Watchlist"])
+tab_search, tab_watch, tab_agent = st.tabs(["Search", "Watchlist", "Agent"])
+
+with tab_agent:
+    st.subheader("Ask the shopping agent")
+    st.caption("LangChain selects read-only tools when an LLM key is configured. Without a key, rules handle simple queries.")
+    agent_query = st.text_input("Your request", placeholder="Compare earbuds under 2000", key="agent_query")
+    agent_sources = st.multiselect("Agent sources", ["flipkart", "amazon", "demo"], default=["demo"], key="agent_sources")
+    use_agent_llm = st.checkbox("Use LLM when configured", value=True)
+    if st.button("Ask agent", type="primary"):
+        from agent import run_shopping_agent
+        if not agent_query.strip():
+            st.warning("Enter a shopping request first.")
+        else:
+            with st.spinner("Running shopping tools..."):
+                try:
+                    st.session_state["agent_answer"] = run_shopping_agent(agent_query, store, agent_sources, use_llm=use_agent_llm)
+                except ValueError as exc:
+                    st.warning(str(exc))
+    if "agent_answer" in st.session_state:
+        from agent import render_answer
+        answer = st.session_state["agent_answer"]
+        st.text(render_answer(answer))
+        with st.expander("Tool facts (for learning/debugging)"):
+            st.json(answer["records"])
+    st.caption("Prices and savings are shown from Python tool results, never from the model's final text. No purchases or watchlist changes.")
 
 with tab_search:
     query = st.text_input("What are you looking for?", placeholder="boat airdopes under 1500")
@@ -76,10 +100,6 @@ with tab_search:
                 st.info("No cheaper similar option found.")
             for p, score in alts:
                 card(p, f"· saves ₹{base.price - p.price:,.0f}")
-            advice = llm.explain(query, {"best_match": base.to_dict(),
-                                         "cheaper": [p.to_dict() for p, _ in alts]})
-            if advice:
-                st.markdown(f"**Advice:** {advice}")
 
 with tab_watch:
     watches = store.watches()
