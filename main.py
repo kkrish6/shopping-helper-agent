@@ -49,10 +49,12 @@ def cmd_search(args, store: Store) -> None:
             print(f"  - saves ₹{base.price - p.price:,.0f}: {fmt(p)}")
     else:
         print("No cheaper similar option found.")
-    advice = llm.explain(args.query, {"best_match": base.to_dict(),
-                                      "cheaper": [p.to_dict() for p, _ in alts]})
-    if advice:
-        print(f"\nAdvice: {advice}")
+
+
+def cmd_agent(args, store: Store) -> None:
+    from agent import render_answer, run_shopping_agent
+    print(render_answer(run_shopping_agent(args.query, store, args.sources,
+                                          use_llm=not args.no_llm)))
 
 
 def cmd_watch(args, store: Store) -> None:
@@ -104,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("search", help="find a product and cheaper alternatives")
     s.add_argument("query")
     s.set_defaults(fn=cmd_search)
+    a = sub.add_parser("agent", help="natural-language tool-calling agent, or rules without a key")
+    a.add_argument("query")
+    a.add_argument("--no-llm", action="store_true", help="force rule-based mode")
+    a.set_defaults(fn=cmd_agent)
     w = sub.add_parser("watch", help="track a product's price")
     w.add_argument("query")
     w.add_argument("--target", type=float, help="alert when price <= this")
